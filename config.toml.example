@@ -46,6 +46,8 @@
 #     [signer.relay.eab]                upstream EAB bootstrap credential
 #     [signer.relay.dns01]              solving the upstream's DNS-01
 #     [signer.relay.dns01.rfc2136]      the TSIG-authenticated DNS update
+#     [signer.relay.dns01.azure]         the Azure DNS REST API, via a
+#                                       federated Keycloak -> Entra credential
 #     [signer.relay.dns01.propagation]  waiting before the upstream looks
 #     [signer.custom]                   shelling out to a script
 #   [challenge]                [per-profile]  how control of a name is proven
@@ -548,10 +550,11 @@ kid = ""                            # ACME_PROXY_SIGNER__RELAY__EAB__KID
 hmac_key = ""                       # ACME_PROXY_SIGNER__RELAY__EAB__HMAC_KEY
 
 [signer.relay.dns01]
-# Only read when challenge_strategy = "dns01". The only provider is "rfc2136",
+# Only read when challenge_strategy = "dns01". The providers are "rfc2136",
 # which works with any authoritative server implementing RFC 2136 dynamic
 # update (BIND, PowerDNS, Knot, CoreDNS with the `update` plugin) rather than
-# tying the server to one cloud vendor's API.
+# tying the server to one cloud vendor's API, and "azure", which writes the
+# record through the Azure DNS REST API under a federated credential.
 provider = "rfc2136"                # ACME_PROXY_SIGNER__RELAY__DNS01__PROVIDER
 
 [signer.relay.dns01.rfc2136]
@@ -568,6 +571,33 @@ tsig_key_secret = ""                # ACME_PROXY_SIGNER__RELAY__DNS01__RFC2136__
 # hmac-sha256 (default), hmac-sha384 or hmac-sha512. HMAC-MD5 is deliberately
 # not offered.
 tsig_algorithm = "hmac-sha256"      # ACME_PROXY_SIGNER__RELAY__DNS01__RFC2136__TSIG_ALGORITHM
+
+[signer.relay.dns01.azure]
+# Only read when provider = "azure". The record is written through the Azure
+# DNS REST API, authenticated with a federated credential: a short-lived JWT
+# from the local OIDC issuer (Keycloak) is exchanged at Microsoft Entra for a
+# management token. The only long-lived secret is the client's.
+# The zone to write, e.g. "example.org." (trailing dot optional).
+zone = ""                           # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__ZONE
+subscription_id = ""                 # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__SUBSCRIPTION_ID
+resource_group = ""                  # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__RESOURCE_GROUP
+# The ARM API version the deployment registers for `dnszones`. The supported
+# set varies between deployments, so this is a config value, not a constant.
+api_version = ""                     # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__API_VERSION
+# The local OIDC issuer (Keycloak realm URL) that mints the assertion.
+issuer = ""                         # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__ISSUER
+# The confidential client at the issuer; its service account is the subject
+# of the federated credential registered on entra_client_id.
+client_id = ""                       # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__CLIENT_ID
+# SENSITIVE — prefer the environment variable to a file on disk.
+client_secret = ""                   # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__CLIENT_SECRET
+# Optional: a PEM file of extra root CAs to trust when talking to the issuer,
+# for an issuer on a private PKI. Public roots are always trusted.
+issuer_ca_file = ""                  # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__ISSUER_CA_FILE
+# The Entra tenant (GUID or domain) hosting entra_client_id.
+entra_tenant_id = ""                 # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__ENTRA_TENANT_ID
+# The Entra application the assertion is federated to.
+entra_client_id = ""                  # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__ENTRA_CLIENT_ID
 
 [signer.relay.dns01.propagation]
 # What to wait for between publishing the record and asking the upstream to

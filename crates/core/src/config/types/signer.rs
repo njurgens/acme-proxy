@@ -228,6 +228,10 @@ pub struct AzureDnsConfig {
     pub client_id: String,
     /// SENSITIVE — prefer the environment variable to a file on disk.
     pub client_secret: String,
+    /// Optional: a PEM file of extra root CAs to trust when talking to
+    /// `issuer`, for an issuer on a private PKI. Public roots are always
+    /// trusted; an empty value means the issuer must chain to one of them.
+    pub issuer_ca_file: String,
     /// The Entra tenant (GUID or domain) hosting `entra_client_id`.
     pub entra_tenant_id: String,
     /// The Entra application the assertion is federated to; its federated

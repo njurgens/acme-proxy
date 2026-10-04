@@ -163,6 +163,27 @@ pub fn webpki_tls_config() -> rustls::ClientConfig {
         .with_no_client_auth()
 }
 
+/// Like [`webpki_tls_config`], but also trusting the roots in `extra` — for
+/// a peer whose chain ends in a private CA rather than a public one.
+///
+/// A root that is already in the webpki set is a duplicate, and rustls
+/// reports that as an error; it is also a legitimate configuration (a private
+/// CA that happens to be public), so the add is best-effort and the store is
+/// what it ends up being.
+pub fn webpki_tls_config_with_extra_roots(extra: &[rustls_pki_types::CertificateDer]) -> rustls::ClientConfig {
+    let mut roots = rustls::RootCertStore {
+        roots: webpki_roots::TLS_SERVER_ROOTS.to_vec(),
+    };
+    for cert in extra {
+        let _ = roots.add(cert.clone());
+    }
+    rustls::ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+        .with_safe_default_protocol_versions()
+        .expect("ring provider supports the default protocol versions")
+        .with_root_certificates(roots)
+        .with_no_client_auth()
+}
+
 /// The transport under an outbound connection: a direct socket, or one
 /// tunnelled through a forward proxy's `CONNECT`.
 ///

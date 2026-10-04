@@ -52,6 +52,7 @@ use acme_proxy_store::db::Database;
 use acme_proxy_store::upstream_order::UpstreamOrder;
 
 pub mod account;
+pub mod azure;
 pub mod client;
 pub mod dns01;
 pub mod eab;
@@ -239,8 +240,21 @@ impl RelaySigner {
                             "rfc2136" => ChallengeStrategy::Dns01(Arc::new(
                                 dns01::Rfc2136Updater::from_config(&cfg.dns01.rfc2136)?,
                             )),
+                            "azure" => {
+                                // The token source is shared with the updater
+                                // (a `401` from ARM invalidates it), and it is
+                                // built here, beside the strategy it serves.
+                                let source = Arc::new(azure::FederatedTokenSource::from_config(
+                                    &cfg.dns01.azure,
+                                    parts.egress.as_ref(),
+                                )?);
+                                ChallengeStrategy::Dns01(Arc::new(azure::AzureDnsUpdater::from_config(
+                                    &cfg.dns01.azure,
+                                    source,
+                                )?))
+                            }
                             other => anyhow::bail!(
-                                "unknown signer.relay.dns01.provider: {other} (supported: rfc2136)"
+                                "unknown signer.relay.dns01.provider: {other} (supported: rfc2136, azure)"
                             ),
                         },
                         "http01" => {
