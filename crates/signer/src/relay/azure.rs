@@ -75,12 +75,16 @@ const ARM_SCOPE: &str = "https://management.azure.com/.default";
 /// The assertion type that says "this JWT is the client's own credential".
 const CLIENT_ASSERTION_TYPE: &str = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer";
 
-/// The Entra endpoint that exchanges a federated assertion for a token.
-fn entra_token_url(tenant: &str) -> Url {
-    Url::parse(&format!(
-        "https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
-    ))
-    .expect("a well-formed tenant cannot build a malformed URL")
+/// The Entra endpoint that exchanges a federated assertion for a token, at
+/// the configured authority for the configured tenant.
+fn entra_token_url(authority: &str, tenant: &str) -> anyhow::Result<Url> {
+    let authority = authority.trim_end_matches('/');
+    Url::parse(&format!("{authority}/{tenant}/oauth2/v2.0/token")).map_err(|error| {
+        anyhow::anyhow!(
+            "signer.relay.dns01.azure.entra_authority ({}) is not a URL: {error}",
+            authority
+        )
+    })
 }
 
 /// A source of Azure Resource Manager tokens, minted through a federated
@@ -122,6 +126,7 @@ impl FederatedTokenSource {
             ("client_secret", &cfg.client_secret),
             ("entra_tenant_id", &cfg.entra_tenant_id),
             ("entra_client_id", &cfg.entra_client_id),
+            ("entra_authority", &cfg.entra_authority),
         ] {
             if value.is_empty() {
                 anyhow::bail!("signer.relay.dns01.azure.{field} is not set");
@@ -140,10 +145,17 @@ impl FederatedTokenSource {
                 cfg.issuer
             );
         }
+        let entra = entra_token_url(&cfg.entra_authority, &cfg.entra_tenant_id)?;
+        if !matches!(entra.scheme(), "http" | "https") {
+            anyhow::bail!(
+                "signer.relay.dns01.azure.entra_authority ({}) must be http or https",
+                cfg.entra_authority
+            );
+        }
 
         Ok(Self {
             issuer,
-            entra: entra_token_url(&cfg.entra_tenant_id),
+            entra,
             client_id: cfg.client_id.clone(),
             client_secret: cfg.client_secret.clone(),
             entra_client_id: cfg.entra_client_id.clone(),
@@ -387,6 +399,7 @@ impl AzureDnsUpdater {
             ("subscription_id", &cfg.subscription_id),
             ("resource_group", &cfg.resource_group),
             ("api_version", &cfg.api_version),
+            ("arm_base", &cfg.arm_base),
         ] {
             if value.is_empty() {
                 anyhow::bail!("signer.relay.dns01.azure.{field} is not set");
@@ -394,8 +407,11 @@ impl AzureDnsUpdater {
         }
         let zone = cfg.zone.trim_end_matches('.').to_ascii_lowercase();
         let base = format!(
-            "https://management.azure.com/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/dnszones/{}",
-            cfg.subscription_id, cfg.resource_group, zone
+            "{}/subscriptions/{}/resourceGroups/{}/providers/Microsoft.Network/dnszones/{}",
+            cfg.arm_base.trim_end_matches('/'),
+            cfg.subscription_id,
+            cfg.resource_group,
+            zone
         );
         let outbound = tokens.outbound.clone();
         Ok(Self {
@@ -996,6 +1012,8 @@ mod tests {
             issuer_ca_file: String::new(),
             entra_tenant_id: "tenant".to_string(),
             entra_client_id: "entra-app".to_string(),
+            entra_authority: "https://login.microsoftonline.com".to_string(),
+            arm_base: "https://management.azure.com".to_string(),
         }
     }
 
@@ -1040,6 +1058,8 @@ mod tests {
             "client_secret",
             "entra_tenant_id",
             "entra_client_id",
+            "entra_authority",
+            "arm_base",
         ];
         for field in fields {
             let mut cfg = azure_config();
@@ -1053,6 +1073,8 @@ mod tests {
                 "client_secret" => &mut cfg.client_secret,
                 "entra_tenant_id" => &mut cfg.entra_tenant_id,
                 "entra_client_id" => &mut cfg.entra_client_id,
+                "entra_authority" => &mut cfg.entra_authority,
+                "arm_base" => &mut cfg.arm_base,
                 _ => unreachable!(),
             };
             slot.clear();

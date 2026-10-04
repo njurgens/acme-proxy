@@ -210,7 +210,7 @@ pub struct Rfc2136Config {
 /// by Entra against the federated credential registered on `entra_client_id`
 /// (issuer = `issuer`, subject = the issuer's service account for
 /// `client_id`). See the relay's `azure` module for the flow.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct AzureDnsConfig {
     /// The zone to write, e.g. `example.org.`.
@@ -237,6 +237,43 @@ pub struct AzureDnsConfig {
     /// The Entra application the assertion is federated to; its federated
     /// credential is what makes the exchange work.
     pub entra_client_id: String,
+    /// The Entra authority the exchange is posted to. The public cloud is the
+    /// default; sovereign clouds (government, national) run their own.
+    #[serde(default = "default_entra_authority")]
+    pub entra_authority: String,
+    /// The management-plane base the zone's record sets live under.
+    #[serde(default = "default_arm_base")]
+    pub arm_base: String,
+}
+
+fn default_entra_authority() -> String {
+    "https://login.microsoftonline.com".to_string()
+}
+
+fn default_arm_base() -> String {
+    "https://management.azure.com".to_string()
+}
+
+/// A manual `Default` rather than a derived one: the two authority fields
+/// default to the public cloud, and the derived impl would give them the
+/// empty string, which `from_config` would then refuse.
+impl Default for AzureDnsConfig {
+    fn default() -> Self {
+        Self {
+            zone: String::new(),
+            subscription_id: String::new(),
+            resource_group: String::new(),
+            api_version: String::new(),
+            issuer: String::new(),
+            client_id: String::new(),
+            client_secret: String::new(),
+            issuer_ca_file: String::new(),
+            entra_tenant_id: String::new(),
+            entra_client_id: String::new(),
+            entra_authority: default_entra_authority(),
+            arm_base: default_arm_base(),
+        }
+    }
 }
 /// Configuration for the persistent local-CA signer backend.
 #[derive(Debug, Clone, Deserialize)]

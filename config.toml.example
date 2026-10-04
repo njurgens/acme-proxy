@@ -598,6 +598,11 @@ issuer_ca_file = ""                  # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__I
 entra_tenant_id = ""                 # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__ENTRA_TENANT_ID
 # The Entra application the assertion is federated to.
 entra_client_id = ""                  # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__ENTRA_CLIENT_ID
+# The Entra authority the exchange is posted to. The public cloud is the
+# default; sovereign clouds (government, national) run their own.
+entra_authority = "https://login.microsoftonline.com"  # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__ENTRA_AUTHORITY
+# The management-plane base the zone's record sets live under.
+arm_base = "https://management.azure.com"             # ACME_PROXY_SIGNER__RELAY__DNS01__AZURE__ARM_BASE
 
 [signer.relay.dns01.propagation]
 # What to wait for between publishing the record and asking the upstream to
