@@ -1,0 +1,2 @@
+fn(State, axum::body::Bytes) -> impl Future<Output = axum::http::Response<Body>> {issuer_token}
+fn(State, axum::body::Bytes) -> impl Future<Output = axum::http::Response<Body>> {issuer_token}: Handler<_, _>

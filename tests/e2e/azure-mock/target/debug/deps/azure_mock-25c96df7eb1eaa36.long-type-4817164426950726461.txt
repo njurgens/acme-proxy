@@ -1,0 +1,2 @@
+fn(State, axum::extract::Path<(std::string::String, std::string::String)>, HeaderMap) -> impl Future<Output = axum::http::Response<Body>> {arm_delete}
+fn(State, axum::extract::Path<(std::string::String, std::string::String)>, HeaderMap) -> impl Future<Output = axum::http::Response<Body>> {arm_delete}: Handler<_, _>

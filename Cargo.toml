@@ -4,7 +4,7 @@
 members = ["crates/*"]
 # Container fixtures for the e2e lab, built by their own `Containerfile`s and
 # never by this workspace.
-exclude = ["tests/e2e/netbox-mock", "tests/e2e/phpipam-mock"]
+exclude = ["tests/e2e/netbox-mock", "tests/e2e/phpipam-mock", "tests/e2e/azure-mock"]
 resolver = "3"
 
 [workspace.package]

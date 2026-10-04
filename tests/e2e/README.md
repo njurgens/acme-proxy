@@ -52,9 +52,9 @@ run them. CI runs only the three challenge scenarios, and only nightly (the
 `e2e` job in `.github/workflows/ci.yml`, `if: github.event_name == 'schedule'`);
 everything else here is a manual check.
 
-The first run of any test builds seven images (`bind-e2e`, `acme-proxy-e2e`,
-`netbox-mock-e2e`, `phpipam-mock-e2e`, `certbot-e2e`, `acmesh-e2e`,
-`lego-e2e`), guarded by a
+The first run of any test builds eight images (`bind-e2e`, `acme-proxy-e2e`,
+`netbox-mock-e2e`, `phpipam-mock-e2e`, `azure-mock-e2e`, `certbot-e2e`,
+`acmesh-e2e`, `lego-e2e`), guarded by a
 cross-process `flock` so nextest's one-process-per-test model doesn't race
 the same `podman build`/`docker build` from multiple tests at once; every
 later test in the same run reuses those images. Each test then gets its own
@@ -130,7 +130,7 @@ already uses for `lego` itself (see "key_change.rs" below).
   (`docker` if present, else `podman`; overridable via `CONTAINER_RUNTIME`),
   points `DOCKER_HOST` at the rootless-Podman socket if it isn't already
   set — failing with a clear message if `podman.socket` isn't already
-  active rather than starting it itself — and builds all seven images once
+  active rather than starting it itself — and builds all eight images once
   per run behind the flock described above.
 - **`Lab::new(env)`** starts a dedicated bridge network plus `dns`,
   `acme-proxy`, `certbot`, `acme-sh` and `lego` containers, and — only when

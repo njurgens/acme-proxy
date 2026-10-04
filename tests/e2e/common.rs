@@ -106,6 +106,7 @@ pub fn ensure_images_built() {
             {runtime} build --build-arg CARGO_PROFILE=e2e -t acme-proxy-e2e -f Containerfile . &&
             {runtime} build -t netbox-mock-e2e -f tests/e2e/netbox_mock.Containerfile tests/e2e &&
             {runtime} build -t phpipam-mock-e2e -f tests/e2e/phpipam_mock.Containerfile tests/e2e &&
+            {runtime} build -t azure-mock-e2e -f tests/e2e/azure_mock.Containerfile tests/e2e &&
             {runtime} build -t certbot-e2e -f tests/e2e/certbot.Containerfile tests/e2e &&
             {runtime} build -t acmesh-e2e -f tests/e2e/acmesh.Containerfile tests/e2e &&
             {runtime} build -t lego-e2e -f tests/e2e/lego.Containerfile tests/e2e &&
@@ -132,6 +133,7 @@ pub struct Lab {
     pub lego: ContainerAsync<GenericImage>,
     pub netbox_mock: Option<ContainerAsync<GenericImage>>,
     pub phpipam_mock: Option<ContainerAsync<GenericImage>>,
+    pub azure_mock: Option<ContainerAsync<GenericImage>>,
     pub proxy_upstream: Option<ContainerAsync<GenericImage>>,
     pub proxy_url: String,
     pub proxy_upstream_url: Option<String>,
@@ -265,6 +267,7 @@ impl Lab {
         // reason to have one.
         let needs_netbox = env.iter().any(|(_, v)| v.contains("NETBOX_IP"));
         let needs_phpipam = env.iter().any(|(_, v)| v.contains("PHPIPAM_IP"));
+        let needs_azure = env.iter().any(|(_, v)| v.contains("AZURE_MOCK_IP"));
 
         let netbox_mock_host = format!("netbox-mock-{}", uuid);
         let netbox_request = GenericImage::new("netbox-mock-e2e", "latest")
@@ -279,6 +282,15 @@ impl Lab {
             .with_container_name(&phpipam_mock_host)
             .with_env_var("CERTBOT_IP", &certbot_ip)
             .with_env_var("ACMESH_IP", &acmesh_ip);
+
+        // The mock's writes are mirrored into the lab's BIND over RFC 2136,
+        // so it is told where BIND is; the relay reaches the mock over the
+        // same network the placeholder below names.
+        let azure_mock_host = format!("azure-mock-{}", uuid);
+        let azure_mock_request = GenericImage::new("azure-mock-e2e", "latest")
+            .with_network(&network)
+            .with_container_name(&azure_mock_host)
+            .with_env_var("BIND_HOST", &dns_ip);
 
         let upstream_request = env_upstream.map(|upstream_env| {
             let upstream_host = format!("proxy-upstream-{}", uuid);
@@ -322,15 +334,17 @@ impl Lab {
         // started above — so they go up together rather than as three sequential
         // start/inspect round trips. The proxy is the one container that has to
         // wait, since its environment names all of them.
-        let (netbox_mock, phpipam_mock, proxy_upstream) = tokio::join!(
+        let (netbox_mock, phpipam_mock, azure_mock, proxy_upstream) = tokio::join!(
             Self::start_if_wanted(needs_netbox.then_some(netbox_request), "netbox-mock"),
             Self::start_if_wanted(needs_phpipam.then_some(phpipam_request), "phpipam-mock"),
+            Self::start_if_wanted(needs_azure.then_some(azure_mock_request), "azure-mock"),
             Self::start_if_wanted(upstream_request, "proxy upstream"),
         );
 
-        let (netbox_ip, phpipam_ip, upstream_ip) = tokio::join!(
+        let (netbox_ip, phpipam_ip, azure_mock_ip, upstream_ip) = tokio::join!(
             Self::get_ip_of(netbox_mock.as_ref(), &network),
             Self::get_ip_of(phpipam_mock.as_ref(), &network),
+            Self::get_ip_of(azure_mock.as_ref(), &network),
             Self::get_ip_of(proxy_upstream.as_ref(), &network),
         );
 
@@ -362,6 +376,11 @@ impl Lab {
                     .as_deref()
                     .expect("a PHPIPAM_IP placeholder with no phpipam-mock started");
                 proxy_image = proxy_image.with_env_var(k, v.replace("PHPIPAM_IP", ip));
+            } else if v.contains("AZURE_MOCK_IP") {
+                let ip = azure_mock_ip
+                    .as_deref()
+                    .expect("an AZURE_MOCK_IP placeholder with no azure-mock started");
+                proxy_image = proxy_image.with_env_var(k, v.replace("AZURE_MOCK_IP", ip));
             } else if v.contains("UPSTREAM_URL") {
                 if let Some(ref url) = proxy_upstream_url {
                     proxy_image = proxy_image.with_env_var(k, v.replace("UPSTREAM_URL", url));
@@ -391,6 +410,7 @@ impl Lab {
             lego,
             netbox_mock,
             phpipam_mock,
+            azure_mock,
             proxy_upstream,
             proxy_url: proxy_url_with_path,
             proxy_upstream_url,

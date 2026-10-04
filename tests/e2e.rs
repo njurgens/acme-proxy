@@ -37,6 +37,9 @@ mod custom_signer;
 #[path = "e2e/relay_signer.rs"]
 mod relay_signer;
 
+#[path = "e2e/azure_dns.rs"]
+mod azure_dns;
+
 #[path = "e2e/key_change.rs"]
 mod key_change;
 
