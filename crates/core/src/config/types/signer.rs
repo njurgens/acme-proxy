@@ -151,6 +151,7 @@ pub struct RelayEabConfig {
 pub struct Dns01Config {
     pub provider: String,
     pub rfc2136: Rfc2136Config,
+    pub azure: AzureDnsConfig,
     pub propagation: Dns01PropagationConfig,
 }
 
@@ -159,6 +160,7 @@ impl Default for Dns01Config {
         Self {
             provider: "rfc2136".to_string(),
             rfc2136: Rfc2136Config::default(),
+            azure: AzureDnsConfig::default(),
             propagation: Dns01PropagationConfig::default(),
         }
     }
@@ -200,6 +202,37 @@ pub struct Rfc2136Config {
     /// environment variable over a file on disk.
     pub tsig_key_secret: String,
     pub tsig_algorithm: String,
+}
+/// Azure DNS (the public-zone REST API) as the `dns01` writer, authenticated
+/// through a federated credential: a short-lived JWT from the local OIDC
+/// issuer (Keycloak) exchanged for a Microsoft Entra token. The only
+/// long-lived secret is `client_secret`; the assertion it mints is validated
+/// by Entra against the federated credential registered on `entra_client_id`
+/// (issuer = `issuer`, subject = the issuer's service account for
+/// `client_id`). See the relay's `azure` module for the flow.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct AzureDnsConfig {
+    /// The zone to write, e.g. `example.org.`.
+    pub zone: String,
+    pub subscription_id: String,
+    pub resource_group: String,
+    /// ARM API version the deployment registers for `dnszones`; the supported
+    /// set varies between deployments, so this is a config value rather than
+    /// a compiled-in constant.
+    pub api_version: String,
+    /// The local OIDC issuer (Keycloak realm URL) that mints the assertion.
+    pub issuer: String,
+    /// The confidential client at `issuer` whose service account is the
+    /// assertion's subject.
+    pub client_id: String,
+    /// SENSITIVE — prefer the environment variable to a file on disk.
+    pub client_secret: String,
+    /// The Entra tenant (GUID or domain) hosting `entra_client_id`.
+    pub entra_tenant_id: String,
+    /// The Entra application the assertion is federated to; its federated
+    /// credential is what makes the exchange work.
+    pub entra_client_id: String,
 }
 /// Configuration for the persistent local-CA signer backend.
 #[derive(Debug, Clone, Deserialize)]
