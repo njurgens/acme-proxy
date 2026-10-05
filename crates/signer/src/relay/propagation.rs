@@ -44,10 +44,14 @@ pub(super) enum Propagation {
 impl Propagation {
     /// Builds `[signer.relay.dns01.propagation]`, refusing what cannot work.
     ///
-    /// `poll_timeout` is `signer.relay.poll_timeout_secs`, which is the relay
-    /// job's lease and so the only bound on a whole attempt: a delay as long as
-    /// that would have every attempt killed mid-sleep, the record never
-    /// validated and the order retried until its deadline. The delay runs once
+    /// `poll_timeout` is `signer.relay.poll_timeout_secs`. The relay job's
+    /// lease is `poll_timeout` **plus** this delay (see
+    /// [`super::flow::RelayJob::lease`): the delay runs first, and the
+    /// `trigger_and_await` poll that follows it opens a fresh `poll_timeout`
+    /// clock of its own, so a whole attempt can run `delay + poll_timeout`.
+    /// A delay as long as `poll_timeout` is still refused: it would make the
+    /// lease at least twice the poll budget, and the delay would dominate an
+    /// attempt that is supposed to be bounded by the poll. The delay runs once
     /// per authorization, which a startup check cannot see — the documentation
     /// carries that half.
     pub(super) fn from_config(
@@ -96,6 +100,20 @@ impl Propagation {
             }
         }
     }
+
+    /// The fixed wait this variant imposes, or zero for [`Propagation::None`].
+    ///
+    /// The relay job's per-attempt lease is `poll_timeout + delay`, because the
+    /// delay runs before a `trigger_and_await` poll that opens its own fresh
+    /// `poll_timeout` clock: bounding the lease by `poll_timeout` alone would
+    /// kill every attempt mid-poll, the record never validated, the order
+    /// retried until its deadline.
+    pub(super) fn delay(&self) -> Duration {
+        match self {
+            Self::None => Duration::ZERO,
+            Self::Delay(delay) => *delay,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -136,6 +154,17 @@ mod tests {
         assert_eq!(
             Propagation::from_config(&config("Delay", 45), BUDGET).unwrap(),
             Propagation::Delay(Duration::from_secs(45))
+        );
+    }
+
+    /// The lease accessor: `None` contributes nothing, `Delay` its full
+    /// duration — the relay job adds this on top of `poll_timeout`.
+    #[test]
+    fn delay_reports_its_wait() {
+        assert_eq!(Propagation::None.delay(), Duration::ZERO);
+        assert_eq!(
+            Propagation::Delay(Duration::from_secs(90)).delay(),
+            Duration::from_secs(90)
         );
     }
 

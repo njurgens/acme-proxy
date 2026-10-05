@@ -171,7 +171,10 @@ impl RelayJob {
             }
         }
 
-        let longest_lease = targets.iter().map(|(_, state)| state.0.poll.timeout).max();
+        let longest_lease = targets
+            .iter()
+            .map(|(_, state)| state.0.poll.timeout + state.0.dns01_propagation.delay())
+            .max();
 
         Self {
             targets: targets
@@ -241,10 +244,15 @@ impl JobHandler for RelayJob {
     }
 
     /// The per-attempt budget is the **owning profile's**
-    /// `signer.relay.poll_timeout_secs`, which is what the hand-rolled
-    /// `tokio::time::timeout` around this used to be — so an attempt is bounded
-    /// exactly as before, and the queue adds retries on top rather than changing
-    /// how long one try may take.
+    /// `signer.relay.poll_timeout_secs` **plus** its dns-01 propagation delay.
+    ///
+    /// The `+` is the point: `answer_dns01` sleeps for the delay and *then*
+    /// calls `trigger_and_await`, which opens a fresh `poll_timeout` clock of
+    /// its own. Bounding the lease by `poll_timeout` alone would kill every
+    /// attempt mid-poll (at `poll_timeout`, which is `delay` short of where the
+    /// poll's own deadline lands), the record would never be seen as validated,
+    /// and the order would be retried until its deadline. Adding the delay back
+    /// in is what lets one attempt run to the poll's full budget.
     ///
     /// Per profile rather than one number for the handler because
     /// [`poll_until`] has no deadline of its own: this is the only thing
@@ -253,7 +261,7 @@ impl JobHandler for RelayJob {
     /// configured budget, this being synchronous and having no order to read.
     fn lease(&self, job: &Job) -> Option<Duration> {
         self.target_for(job)
-            .map(|inner| inner.poll.timeout)
+            .map(|inner| inner.poll.timeout + inner.dns01_propagation.delay())
             .or(self.longest_lease)
     }
 
